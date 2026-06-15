@@ -3,7 +3,6 @@ from __future__ import annotations
 import base64
 import io
 import sys
-import tempfile
 import unittest
 import zipfile
 from pathlib import Path
@@ -17,10 +16,10 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from ed_platform.app import app
-from ed_platform import service
 
 
 FIXTURE_ROOT = PROJECT_ROOT / "tests" / "fixtures" / "minimal_case"
+PASS_FIXTURE_ROOT = PROJECT_ROOT / "tests" / "fixtures" / "minimal_case_pass"
 
 
 def _encode_file(path: Path) -> str:
@@ -29,39 +28,36 @@ def _encode_file(path: Path) -> str:
 
 class ApiTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.temp_dir = tempfile.TemporaryDirectory()
-        service.STORAGE_ROOT = Path(self.temp_dir.name) / "runs"
         self.client = TestClient(app)
 
     def tearDown(self) -> None:
         self.client.close()
-        self.temp_dir.cleanup()
 
-    def _folder_payload(self) -> dict[str, object]:
+    def _folder_payload(self, fixture_root: Path, label: str) -> dict[str, object]:
         files = []
-        for path in sorted(FIXTURE_ROOT.rglob("*")):
+        for path in sorted(fixture_root.rglob("*")):
             if path.is_file():
                 files.append(
                     {
-                        "path": path.relative_to(FIXTURE_ROOT).as_posix(),
+                        "path": path.relative_to(fixture_root).as_posix(),
                         "content_base64": _encode_file(path),
                     }
                 )
         return {
-            "label": "fixture-folder",
+            "label": label,
             "bc_y": "PBC",
             "max_basis_states": 1000,
             "files": files,
         }
 
-    def _zip_payload(self) -> dict[str, object]:
+    def _zip_payload(self, fixture_root: Path, label: str) -> dict[str, object]:
         buffer = io.BytesIO()
         with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-            for path in sorted(FIXTURE_ROOT.rglob("*")):
+            for path in sorted(fixture_root.rglob("*")):
                 if path.is_file():
-                    archive.write(path, arcname=path.relative_to(FIXTURE_ROOT).as_posix())
+                    archive.write(path, arcname=path.relative_to(fixture_root).as_posix())
         return {
-            "label": "fixture-zip",
+            "label": label,
             "bc_y": "PBC",
             "max_basis_states": 1000,
             "files": [
@@ -77,29 +73,37 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["status"], "ok")
 
-    def test_validate_folder_payload(self) -> None:
-        response = self.client.post("/api/validate", json=self._folder_payload())
+    def test_validate_folder_payload_returns_failures(self) -> None:
+        response = self.client.post("/api/validate", json=self._folder_payload(FIXTURE_ROOT, "fixture-folder"))
         self.assertEqual(response.status_code, 200)
         payload = response.json()
+        self.assertEqual(payload["overall_status"], "fail")
         self.assertEqual(payload["case_count"], 1)
         self.assertEqual(len(payload["cases"]), 1)
         case = payload["cases"][0]
         self.assertEqual(case["case"], "Lx2Ly1_d0_u4_tp0_N2")
-        self.assertEqual(case["green_status"], "compared")
-        self.assertIsNotNone(case["qmc_energy"])
-        self.assertIsNotNone(case["green_relative_frobenius_up"])
-        self.assertIn("report_json", payload["downloads"])
+        self.assertEqual(case["status"], "fail")
+        self.assertGreaterEqual(len(case["failures"]), 1)
+        self.assertEqual(case["checks"][0]["status"], "skipped")
+        self.assertEqual(case["checks"][1]["status"], "fail")
 
-    def test_validate_zip_payload(self) -> None:
-        response = self.client.post("/api/validate", json=self._zip_payload())
+    def test_validate_pass_fixture(self) -> None:
+        response = self.client.post("/api/validate", json=self._folder_payload(PASS_FIXTURE_ROOT, "fixture-pass"))
         self.assertEqual(response.status_code, 200)
         payload = response.json()
-        run_id = payload["run_id"]
-        detail_response = self.client.get(f"/api/runs/{run_id}")
-        self.assertEqual(detail_response.status_code, 200)
-        self.assertEqual(detail_response.json()["run_id"], run_id)
-        artifact_response = self.client.get(f"/api/runs/{run_id}/artifacts/report_json")
-        self.assertEqual(artifact_response.status_code, 200)
+        self.assertEqual(payload["overall_status"], "pass")
+        self.assertEqual(payload["summary"]["passed_cases"], 1)
+        case = payload["cases"][0]
+        self.assertEqual(case["status"], "pass")
+        self.assertEqual(case["checks"][0]["status"], "skipped")
+        self.assertEqual(case["checks"][1]["status"], "pass")
+
+    def test_validate_zip_payload(self) -> None:
+        response = self.client.post("/api/validate", json=self._zip_payload(PASS_FIXTURE_ROOT, "fixture-zip"))
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["case_count"], 1)
+        self.assertEqual(payload["overall_status"], "pass")
 
 
 if __name__ == "__main__":

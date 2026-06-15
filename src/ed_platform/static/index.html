@@ -1,65 +1,68 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>ED Validation Deck</title>
+    <title>ED 测试平台</title>
     <link rel="stylesheet" href="/static/styles.css" />
   </head>
   <body>
     <div class="page-shell">
-      <header class="hero panel">
-        <p class="eyebrow">ED TEST PLATFORM</p>
-        <div class="hero-copy">
-          <div>
-            <h1>Upload result bundles and compare energy plus Green functions instantly.</h1>
-            <p class="lead">
-              This web deck wraps the existing ED benchmark logic, saves every run locally, and emits JSON/CSV/Markdown
-              artifacts that are ready for GitHub Actions.
-            </p>
+      <header class="hero-shell">
+        <div class="hero-copy panel">
+          <p class="eyebrow">ED TEST PLATFORM</p>
+          <h1>上传 case 文件夹或 zip，一键校验 Energy / Green。</h1>
+          <p class="lead">
+            平台直接复用现有 <code>energy_benchmark.py</code> 流程，不再生成 JSON、CSV、Markdown 报告，只保留最直接的
+            QA 结果: 通过、不通过，以及失败原因。
+          </p>
+          <div class="hero-badges">
+            <span class="hero-badge">Energy 比对</span>
+            <span class="hero-badge">Green 函数比对</span>
+            <span class="hero-badge">失败即返回</span>
           </div>
-          <div class="hero-stats">
-            <div class="metric-chip">
-              <span class="metric-label">Comparison core</span>
-              <strong>Reused from current ED scripts</strong>
-            </div>
-            <div class="metric-chip">
-              <span class="metric-label">Upload modes</span>
-              <strong>Folder or zip bundle</strong>
-            </div>
-            <div class="metric-chip">
-              <span class="metric-label">Outputs</span>
-              <strong>JSON / CSV / Markdown</strong>
-            </div>
+        </div>
+        <div class="hero-side panel">
+          <div class="hero-stat">
+            <span class="stat-label">比对内核</span>
+            <strong>现有 ED 脚本</strong>
           </div>
+          <div class="hero-stat">
+            <span class="stat-label">上传格式</span>
+            <strong>文件夹或 zip</strong>
+          </div>
+          <div class="hero-stat">
+            <span class="stat-label">结果输出</span>
+            <strong>仅展示通过/不通过</strong>
+          </div>
+          <span id="healthBadge" class="status-pill neutral">正在检查后端</span>
         </div>
       </header>
 
-      <main class="content-grid">
-        <section class="panel input-panel">
+      <main class="workspace-grid">
+        <section class="panel upload-panel">
           <div class="section-head">
             <div>
-              <p class="eyebrow">Run Validation</p>
-              <h2>Feed the platform with one case folder or a packed archive.</h2>
+              <p class="eyebrow">Step 1</p>
+              <h2>选择要检测的结果包</h2>
             </div>
-            <span id="healthBadge" class="status-pill neutral">Checking backend</span>
           </div>
 
           <label class="field">
-            <span>Run label</span>
-            <input id="labelInput" type="text" maxlength="80" placeholder="e.g. 16x4-u4-smoke-bundle" />
+            <span>任务标签</span>
+            <input id="labelInput" type="text" maxlength="80" placeholder="例如: L16x4-u4-regression-check" />
           </label>
 
           <div class="field-row">
             <label class="field">
-              <span>Boundary condition</span>
+              <span>边界条件</span>
               <select id="bcSelect">
                 <option value="PBC">PBC</option>
                 <option value="APBC">APBC</option>
               </select>
             </label>
             <label class="field">
-              <span>Max Hilbert size</span>
+              <span>最大 Hilbert 维数</span>
               <input id="basisInput" type="number" min="1" step="1" value="250000" />
             </label>
           </div>
@@ -67,77 +70,138 @@
           <div class="upload-grid">
             <label class="upload-card">
               <input id="folderInput" type="file" webkitdirectory directory multiple />
-              <span class="upload-kicker">Folder upload</span>
-              <strong>Select a case folder tree</strong>
-              <p>Best when you want to keep the original directory layout intact.</p>
+              <span class="upload-kicker">Folder mode</span>
+              <strong>上传 case 文件夹</strong>
+              <p>适合已有标准 case 目录结构的结果输出，直接整包读取。</p>
             </label>
             <label class="upload-card">
               <input id="zipInput" type="file" accept=".zip,application/zip" />
-              <span class="upload-kicker">Zip upload</span>
-              <strong>Drop a single archive</strong>
-              <p>Recommended for moving results between machines or triggering GitHub validation later.</p>
+              <span class="upload-kicker">Zip mode</span>
+              <strong>上传 zip 压缩包</strong>
+              <p>适合跨机器传输后的结果包，平台会自动解压并识别其中的 case。</p>
             </label>
           </div>
 
           <div class="selection-box">
-            <p class="selection-title">Current selection</p>
-            <p id="selectionSummary">No files selected yet.</p>
+            <p class="selection-title">当前选择</p>
+            <p id="selectionSummary">还没有选择任何文件。</p>
           </div>
 
           <div class="action-row">
-            <button id="validateButton" class="primary-button" type="button">Run comparison</button>
-            <span id="actionMessage" class="action-message">The browser will encode files to JSON and send them to the local API.</span>
+            <button id="validateButton" class="primary-button" type="button">开始校验</button>
+            <p id="actionMessage" class="action-message">
+              浏览器会先读取上传内容，再把结果包送到本地接口做一次完整校验。
+            </p>
           </div>
         </section>
 
-        <aside class="panel history-panel">
+        <aside class="panel rule-panel">
           <div class="section-head compact">
             <div>
-              <p class="eyebrow">Run History</p>
-              <h2>Recent validations</h2>
+              <p class="eyebrow">Step 2</p>
+              <h2>当前校验规则</h2>
             </div>
-            <button id="refreshHistoryButton" class="ghost-button" type="button">Refresh</button>
           </div>
-          <div id="historyList" class="history-list">
-            <p class="muted">No stored runs yet.</p>
+
+          <div class="rule-block">
+            <strong>Energy</strong>
+            <p>优先使用 exact ED 结果做能量比对。如果当前环境无法生成 exact ED，则该项标记为跳过。</p>
+            <span id="energyRuleValue" class="rule-chip">正在加载阈值</span>
+          </div>
+
+          <div class="rule-block">
+            <strong>Green 函数</strong>
+            <p>要求矩阵形状一致，且相对 Frobenius 误差低于设定阈值。</p>
+            <span id="greenRuleValue" class="rule-chip">正在加载阈值</span>
+          </div>
+
+          <div class="step-list">
+            <div class="step-item">
+              <span>1</span>
+              <p>上传 case 文件夹或 zip 压缩包。</p>
+            </div>
+            <div class="step-item">
+              <span>2</span>
+              <p>平台会自动识别其中的有效 case 目录。</p>
+            </div>
+            <div class="step-item">
+              <span>3</span>
+              <p>结果页只展示通过、不通过，以及对应失败原因。</p>
+            </div>
           </div>
         </aside>
 
-        <section class="panel results-panel">
+        <section class="panel result-panel">
           <div class="section-head">
             <div>
-              <p class="eyebrow">Validation Output</p>
-              <h2>Energy and Green-function diagnostics</h2>
+              <p class="eyebrow">Step 3</p>
+              <h2>校验结果面板</h2>
             </div>
-            <div id="downloadLinks" class="download-links"></div>
           </div>
 
-          <div id="resultsSummary" class="results-summary empty-state">
-            <h3>Nothing has been validated yet.</h3>
-            <p>Select a folder or zip bundle, then run the comparison to populate this view.</p>
+          <div id="resultEmpty" class="empty-state">
+            <h3>还没有执行校验。</h3>
+            <p>运行一次检测后，这里会展示整体结果、失败 case，以及每个阻塞项的原因。</p>
           </div>
 
-          <div id="casesTableWrap" class="table-wrap hidden">
-            <table id="casesTable">
-              <thead>
-                <tr>
-                  <th>Case</th>
-                  <th>Mode</th>
-                  <th>QMC energy</th>
-                  <th>ED energy</th>
-                  <th>ED-QMC</th>
-                  <th>Green status</th>
-                  <th>relF up</th>
-                  <th>relF dn</th>
-                  <th>Trace up</th>
-                  <th>Trace dn</th>
-                </tr>
-              </thead>
-              <tbody id="casesTableBody"></tbody>
-            </table>
-          </div>
+          <div id="resultContent" class="hidden">
+            <section class="status-board">
+              <div class="status-copy">
+                <span id="overallStatusBadge" class="overall-badge neutral">等待中</span>
+                <h3 id="overallHeadline">校验尚未开始。</h3>
+                <p id="overallText" class="muted">结果区会汇总通过数量，并直接返回失败原因。</p>
+              </div>
+              <div class="score-grid">
+                <div class="score-card">
+                  <span>Case 总数</span>
+                  <strong id="scoreCases">0</strong>
+                </div>
+                <div class="score-card">
+                  <span>通过</span>
+                  <strong id="scorePassed">0</strong>
+                </div>
+                <div class="score-card">
+                  <span>不通过</span>
+                  <strong id="scoreFailed">0</strong>
+                </div>
+                <div class="score-card">
+                  <span>Energy 跳过</span>
+                  <strong id="scoreEnergySkipped">0</strong>
+                </div>
+              </div>
+            </section>
 
-          <div id="caseCards" class="case-cards"></div>
+            <section class="summary-strip">
+              <div class="mini-summary">
+                <span>Energy 校验</span>
+                <strong id="energySummary">-</strong>
+              </div>
+              <div class="mini-summary">
+                <span>Green 校验</span>
+                <strong id="greenSummary">-</strong>
+              </div>
+              <div class="mini-summary">
+                <span>更新时间</span>
+                <strong id="updatedSummary">-</strong>
+              </div>
+            </section>
+
+            <section class="case-section">
+              <div class="case-section-head">
+                <h3>失败返回区</h3>
+                <p class="muted">这里只列出不通过的 case，并标明具体卡在哪个校验项。</p>
+              </div>
+              <div id="failedCases" class="case-stack"></div>
+            </section>
+
+            <section class="case-section">
+              <div class="case-section-head">
+                <h3>通过的 case</h3>
+                <p class="muted">通过项会保持紧凑展示，方便快速扫一遍结果。</p>
+              </div>
+              <div id="passedCases" class="pass-grid"></div>
+            </section>
+          </div>
         </section>
       </main>
     </div>

@@ -7,36 +7,95 @@ const validateButton = document.getElementById("validateButton");
 const selectionSummary = document.getElementById("selectionSummary");
 const actionMessage = document.getElementById("actionMessage");
 const healthBadge = document.getElementById("healthBadge");
-const historyList = document.getElementById("historyList");
-const refreshHistoryButton = document.getElementById("refreshHistoryButton");
-const downloadLinks = document.getElementById("downloadLinks");
-const resultsSummary = document.getElementById("resultsSummary");
-const casesTableWrap = document.getElementById("casesTableWrap");
-const casesTableBody = document.getElementById("casesTableBody");
-const caseCards = document.getElementById("caseCards");
+const energyRuleValue = document.getElementById("energyRuleValue");
+const greenRuleValue = document.getElementById("greenRuleValue");
+const resultEmpty = document.getElementById("resultEmpty");
+const resultContent = document.getElementById("resultContent");
+const overallStatusBadge = document.getElementById("overallStatusBadge");
+const overallHeadline = document.getElementById("overallHeadline");
+const overallText = document.getElementById("overallText");
+const scoreCases = document.getElementById("scoreCases");
+const scorePassed = document.getElementById("scorePassed");
+const scoreFailed = document.getElementById("scoreFailed");
+const scoreEnergySkipped = document.getElementById("scoreEnergySkipped");
+const energySummary = document.getElementById("energySummary");
+const greenSummary = document.getElementById("greenSummary");
+const updatedSummary = document.getElementById("updatedSummary");
+const failedCases = document.getElementById("failedCases");
+const passedCases = document.getElementById("passedCases");
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
 
 function formatNumber(value) {
   if (value === null || value === undefined || Number.isNaN(value)) {
-    return "—";
+    return "-";
   }
   return Number(value).toPrecision(6).replace(/\.?0+$/, "");
+}
+
+function formatTimestamp(value) {
+  if (!value) {
+    return "-";
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+  return parsed.toLocaleString("zh-CN", { hour12: false });
+}
+
+function localizeStatus(status) {
+  if (status === "pass") {
+    return "\u901a\u8fc7";
+  }
+  if (status === "fail") {
+    return "\u4e0d\u901a\u8fc7";
+  }
+  if (status === "skipped") {
+    return "\u8df3\u8fc7";
+  }
+  return status || "-";
+}
+
+function localizeCheckName(name) {
+  if (name === "Green function") {
+    return "Green \u51fd\u6570";
+  }
+  return name || "-";
+}
+
+function setRuleChips(rules) {
+  if (!rules) {
+    energyRuleValue.textContent = "Energy \u9608\u503c\u4e0d\u53ef\u7528";
+    greenRuleValue.textContent = "Green \u9608\u503c\u4e0d\u53ef\u7528";
+    return;
+  }
+  energyRuleValue.textContent = `|ED - QMC| <= ${formatNumber(rules.energy_abs_tolerance)}`;
+  greenRuleValue.textContent = `max(relF) <= ${formatNumber(rules.green_relative_tolerance)}`;
 }
 
 function describeSelection() {
   if (zipInput.files.length > 0) {
     const file = zipInput.files[0];
-    selectionSummary.textContent = `Zip bundle selected: ${file.name} (${file.size.toLocaleString()} bytes).`;
+    selectionSummary.textContent = `\u5df2\u9009\u62e9 zip \u538b\u7f29\u5305: ${file.name}\uff08${file.size.toLocaleString()} bytes\uff09\u3002`;
     return;
   }
 
   if (folderInput.files.length > 0) {
     const files = Array.from(folderInput.files);
-    const sample = files[0]?.webkitRelativePath || files[0]?.name || "";
-    selectionSummary.textContent = `Folder selection contains ${files.length} files. Root sample: ${sample}`;
+    const rootSample = files[0]?.webkitRelativePath || files[0]?.name || "";
+    selectionSummary.textContent = `\u5df2\u9009\u62e9\u6587\u4ef6\u5939\uff0c\u5171 ${files.length} \u4e2a\u6587\u4ef6\u3002\u76ee\u5f55\u793a\u4f8b: ${rootSample}`;
     return;
   }
 
-  selectionSummary.textContent = "No files selected yet.";
+  selectionSummary.textContent = "\u8fd8\u6ca1\u6709\u9009\u62e9\u4efb\u4f55\u6587\u4ef6\u3002";
 }
 
 function fileToBase64(file) {
@@ -63,12 +122,7 @@ async function buildPayload() {
       label,
       bc_y,
       max_basis_states,
-      files: [
-        {
-          path: file.name,
-          content_base64: await fileToBase64(file),
-        },
-      ],
+      files: [{ path: file.name, content_base64: await fileToBase64(file) }],
     };
   }
 
@@ -82,138 +136,102 @@ async function buildPayload() {
     return { label, bc_y, max_basis_states, files };
   }
 
-  throw new Error("Select a folder tree or a zip file first.");
+  throw new Error("\u8bf7\u5148\u9009\u62e9 case \u6587\u4ef6\u5939\u6216 zip \u538b\u7f29\u5305\u3002");
 }
 
-function renderDownloads(downloads) {
-  downloadLinks.innerHTML = "";
-  Object.entries(downloads || {}).forEach(([key, href]) => {
-    const anchor = document.createElement("a");
-    anchor.className = "download-link";
-    anchor.href = href;
-    anchor.textContent = key.replaceAll("_", " ");
-    downloadLinks.appendChild(anchor);
-  });
+function badgeClass(status, prefix) {
+  return `${prefix} ${status}`;
 }
 
-function renderSummary(run) {
-  resultsSummary.classList.remove("empty-state");
-  resultsSummary.innerHTML = "";
-
-  const cards = [
-    ["Run ID", run.run_id],
-    ["Created", run.created_at],
-    ["Boundary", run.bc_y],
-    ["Cases", String(run.case_count)],
-  ];
-
-  cards.forEach(([label, value]) => {
-    const card = document.createElement("div");
-    card.className = "summary-card";
-    card.innerHTML = `<span>${label}</span><strong>${value}</strong>`;
-    resultsSummary.appendChild(card);
-  });
+function renderCheck(check) {
+  const metricText =
+    check.metric !== null && check.metric !== undefined && check.tolerance !== null && check.tolerance !== undefined
+      ? ` \u6307\u6807 ${formatNumber(check.metric)}\uff0c\u9608\u503c ${formatNumber(check.tolerance)}\u3002`
+      : "";
+  const referenceText = check.reference_source ? ` \u53c2\u8003\u6765\u6e90: ${escapeHtml(check.reference_source)}\u3002` : "";
+  return `
+    <div class="check-row ${escapeHtml(check.status)}">
+      <div class="check-top">
+        <strong>${escapeHtml(localizeCheckName(check.name))}</strong>
+        <span class="${badgeClass(escapeHtml(check.status), "check-pill")}">${escapeHtml(localizeStatus(check.status))}</span>
+      </div>
+      <p>${escapeHtml(check.summary)}${metricText}${referenceText}</p>
+    </div>
+  `;
 }
 
-function renderCases(run) {
-  const cases = run.cases || [];
-  casesTableBody.innerHTML = "";
-  caseCards.innerHTML = "";
-
-  if (cases.length === 0) {
-    casesTableWrap.classList.add("hidden");
-    return;
-  }
-
-  casesTableWrap.classList.remove("hidden");
-  cases.forEach((item) => {
-    const row = document.createElement("tr");
-    row.innerHTML = `
-      <td>${item.case}</td>
-      <td>${item.benchmark_mode}</td>
-      <td>${formatNumber(item.qmc_energy)}</td>
-      <td>${formatNumber(item.ed_energy)}</td>
-      <td>${formatNumber(item.ed_minus_qmc)}</td>
-      <td>${item.green_status}</td>
-      <td>${formatNumber(item.green_relative_frobenius_up)}</td>
-      <td>${formatNumber(item.green_relative_frobenius_dn)}</td>
-      <td>${formatNumber(item.green_trace_qmc_up)} / ${formatNumber(item.green_trace_ref_up)}</td>
-      <td>${formatNumber(item.green_trace_qmc_dn)} / ${formatNumber(item.green_trace_ref_dn)}</td>
-    `;
-    casesTableBody.appendChild(row);
-
-    const card = document.createElement("article");
-    card.className = "case-card";
-    const notes = Array.isArray(item.benchmark_notes) ? item.benchmark_notes : [];
-    card.innerHTML = `
-      <div class="case-card-head">
+function renderFailureCase(caseItem) {
+  const notes = Array.isArray(caseItem.notes) ? caseItem.notes : [];
+  const notesHtml =
+    notes.length > 0
+      ? `<div class="note-list">${notes.map((note) => `<div class="note-item">${escapeHtml(note)}</div>`).join("")}</div>`
+      : "";
+  return `
+    <article class="failure-card">
+      <div class="case-head">
         <div>
-          <strong>${item.case}</strong>
-          <div class="muted">${item.lx}x${item.ly}, nup=${item.nup}, ndn=${item.ndn}, U=${formatNumber(item.u)}</div>
+          <strong>${escapeHtml(caseItem.case)}</strong>
+          <div class="case-meta">${escapeHtml(caseItem.lattice)}</div>
         </div>
-        <span class="status-pill ${item.green_status === "compared" ? "ok" : "neutral"}">${item.green_status}</span>
+        <span class="${badgeClass(escapeHtml(caseItem.status), "overall-badge")}">${escapeHtml(localizeStatus(caseItem.status))}</span>
       </div>
-      <div class="pill-row">
-        <span class="mini-pill">Mode: ${item.benchmark_mode}</span>
-        <span class="mini-pill">QMC: ${formatNumber(item.qmc_energy)}</span>
-        <span class="mini-pill">ED: ${formatNumber(item.ed_energy)}</span>
-        <span class="mini-pill">relF up: ${formatNumber(item.green_relative_frobenius_up)}</span>
-        <span class="mini-pill">relF dn: ${formatNumber(item.green_relative_frobenius_dn)}</span>
-      </div>
-      <p class="notes">${notes.length > 0 ? notes.join(" | ") : "No benchmark notes were emitted for this case."}</p>
-    `;
-    caseCards.appendChild(card);
-  });
+      <p class="case-meta">${escapeHtml(caseItem.headline)}</p>
+      <div class="check-list">${caseItem.checks.map(renderCheck).join("")}</div>
+      ${notesHtml}
+    </article>
+  `;
 }
 
-function renderRun(run) {
-  renderSummary(run);
-  renderDownloads(run.downloads);
-  renderCases(run);
+function renderPassCase(caseItem) {
+  return `
+    <article class="pass-card">
+      <div class="case-head">
+        <div>
+          <strong>${escapeHtml(caseItem.case)}</strong>
+          <div class="case-meta">${escapeHtml(caseItem.lattice)}</div>
+        </div>
+        <span class="${badgeClass(escapeHtml(caseItem.status), "overall-badge")}">${escapeHtml(localizeStatus(caseItem.status))}</span>
+      </div>
+      <p class="case-meta">${escapeHtml(caseItem.headline)}</p>
+      <div class="check-list">${caseItem.checks.map(renderCheck).join("")}</div>
+    </article>
+  `;
 }
 
-async function loadHistory() {
-  historyList.innerHTML = `<p class="muted">Loading stored runs…</p>`;
-  const response = await fetch("/api/runs");
-  if (!response.ok) {
-    historyList.innerHTML = `<p class="muted">Failed to load run history.</p>`;
-    return;
-  }
+function renderResults(payload) {
+  resultEmpty.classList.add("hidden");
+  resultContent.classList.remove("hidden");
 
-  const payload = await response.json();
-  const runs = payload.runs || [];
-  if (runs.length === 0) {
-    historyList.innerHTML = `<p class="muted">No stored runs yet.</p>`;
-    return;
-  }
+  const overallFail = payload.overall_status === "fail";
+  overallStatusBadge.className = badgeClass(payload.overall_status, "overall-badge");
+  overallStatusBadge.textContent = overallFail ? "\u4e0d\u901a\u8fc7" : "\u901a\u8fc7";
+  overallHeadline.textContent = overallFail
+    ? "\u5b58\u5728 case \u672a\u901a\u8fc7\u5f53\u524d\u6821\u9a8c\u89c4\u5219\u3002"
+    : "\u672c\u6b21\u68c0\u6d4b\u4e2d\u7684\u6240\u6709 case \u5747\u901a\u8fc7\u5f53\u524d\u6821\u9a8c\u89c4\u5219\u3002";
+  overallText.textContent = overallFail
+    ? "\u8bf7\u5728\u4e0b\u65b9\u5931\u8d25\u8fd4\u56de\u533a\u67e5\u770b\u6bcf\u4e2a\u5931\u8d25 case \u7684\u963b\u585e\u9879\u548c\u5177\u4f53\u539f\u56e0\u3002"
+    : "\u5f53\u524d Energy \u4e0e Green \u6821\u9a8c\u4e2d\u6ca1\u6709\u53d1\u73b0\u963b\u585e\u6027\u4e0d\u4e00\u81f4\u3002";
 
-  historyList.innerHTML = "";
-  let autoLoaded = false;
-  runs.forEach((run) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "history-item";
-    button.innerHTML = `
-      <strong>${run.label || run.run_id}</strong>
-      <span class="history-meta">${run.created_at}</span>
-      <span class="history-meta">${run.case_count} case(s): ${run.case_names.join(", ")}</span>
-    `;
-    button.addEventListener("click", async () => {
-      const detail = await fetch(`/api/runs/${run.run_id}`);
-      if (!detail.ok) {
-        actionMessage.textContent = `Failed to load run ${run.run_id}.`;
-        return;
-      }
-      renderRun(await detail.json());
-      actionMessage.textContent = `Loaded stored run ${run.run_id}.`;
-    });
-    historyList.appendChild(button);
+  scoreCases.textContent = String(payload.case_count);
+  scorePassed.textContent = String(payload.summary.passed_cases);
+  scoreFailed.textContent = String(payload.summary.failed_cases);
+  scoreEnergySkipped.textContent = String(payload.summary.energy.skipped);
+  energySummary.textContent = `\u901a\u8fc7 ${payload.summary.energy.pass} / \u5931\u8d25 ${payload.summary.energy.fail} / \u8df3\u8fc7 ${payload.summary.energy.skipped}`;
+  greenSummary.textContent = `\u901a\u8fc7 ${payload.summary.green.pass} / \u5931\u8d25 ${payload.summary.green.fail} / \u8df3\u8fc7 ${payload.summary.green.skipped}`;
+  updatedSummary.textContent = formatTimestamp(payload.created_at);
+  setRuleChips(payload.rules);
 
-    if (!autoLoaded && caseCards.children.length === 0) {
-      autoLoaded = true;
-      button.click();
-    }
-  });
+  const failures = payload.failed_cases || [];
+  const passes = (payload.cases || []).filter((caseItem) => caseItem.status === "pass");
+
+  failedCases.innerHTML =
+    failures.length > 0
+      ? failures.map(renderFailureCase).join("")
+      : '<div class="pass-card">\u672c\u6b21\u8fd0\u884c\u6ca1\u6709\u8fd4\u56de\u5931\u8d25 case\u3002</div>';
+  passedCases.innerHTML =
+    passes.length > 0
+      ? passes.map(renderPassCase).join("")
+      : '<div class="failure-card">\u672c\u6b21\u8fd0\u884c\u6ca1\u6709\u8fd4\u56de\u901a\u8fc7 case\u3002</div>';
 }
 
 async function checkHealth() {
@@ -223,10 +241,10 @@ async function checkHealth() {
       throw new Error("health check failed");
     }
     healthBadge.className = "status-pill ok";
-    healthBadge.textContent = "Backend ready";
+    healthBadge.textContent = "\u540e\u7aef\u5df2\u5c31\u7eea";
   } catch (error) {
     healthBadge.className = "status-pill error";
-    healthBadge.textContent = "Backend unavailable";
+    healthBadge.textContent = "\u540e\u7aef\u4e0d\u53ef\u7528";
   }
 }
 
@@ -246,7 +264,7 @@ zipInput.addEventListener("change", () => {
 
 validateButton.addEventListener("click", async () => {
   validateButton.disabled = true;
-  actionMessage.textContent = "Encoding files and sending the validation request…";
+  actionMessage.textContent = "\u6b63\u5728\u8bfb\u53d6\u4e0a\u4f20\u5185\u5bb9\u5e76\u6267\u884c\u6821\u9a8c...";
 
   try {
     const payload = await buildPayload();
@@ -257,24 +275,24 @@ validateButton.addEventListener("click", async () => {
     });
     const result = await response.json();
     if (!response.ok) {
-      throw new Error(result.detail || "Validation failed.");
+      throw new Error(result.detail || "\u6821\u9a8c\u5931\u8d25\u3002");
     }
-    renderRun(result);
-    actionMessage.textContent = `Validation complete for ${result.case_count} case(s).`;
-    await loadHistory();
+    renderResults(result);
+    actionMessage.textContent =
+      result.overall_status === "fail"
+        ? `\u6821\u9a8c\u5b8c\u6210\uff0c\u8fd4\u56de ${result.summary.failed_cases} \u4e2a\u672a\u901a\u8fc7 case\u3002`
+        : `\u6821\u9a8c\u5b8c\u6210\uff0c${result.case_count} \u4e2a case \u5168\u90e8\u901a\u8fc7\u3002`;
+    resultContent.scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (error) {
-    actionMessage.textContent = error.message || "Validation failed.";
+    actionMessage.textContent = error.message || "\u6821\u9a8c\u5931\u8d25\u3002";
   } finally {
     validateButton.disabled = false;
   }
 });
 
-refreshHistoryButton.addEventListener("click", () => {
-  loadHistory().catch((error) => {
-    actionMessage.textContent = error.message || "Failed to refresh history.";
-  });
-});
-
 checkHealth();
-loadHistory();
+setRuleChips({
+  energy_abs_tolerance: 1.0e-3,
+  green_relative_tolerance: 1.0e-1,
+});
 describeSelection();
