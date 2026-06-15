@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>ED Validation Deck</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="hero panel">
+        <p class="eyebrow">ED TEST PLATFORM</p>
+        <div class="hero-copy">
+          <div>
+            <h1>Upload result bundles and compare energy plus Green functions instantly.</h1>
+            <p class="lead">
+              This web deck wraps the existing ED benchmark logic, saves every run locally, and emits JSON/CSV/Markdown
+              artifacts that are ready for GitHub Actions.
+            </p>
+          </div>
+          <div class="hero-stats">
+            <div class="metric-chip">
+              <span class="metric-label">Comparison core</span>
+              <strong>Reused from current ED scripts</strong>
+            </div>
+            <div class="metric-chip">
+              <span class="metric-label">Upload modes</span>
+              <strong>Folder or zip bundle</strong>
+            </div>
+            <div class="metric-chip">
+              <span class="metric-label">Outputs</span>
+              <strong>JSON / CSV / Markdown</strong>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main class="content-grid">
+        <section class="panel input-panel">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">Run Validation</p>
+              <h2>Feed the platform with one case folder or a packed archive.</h2>
+            </div>
+            <span id="healthBadge" class="status-pill neutral">Checking backend</span>
+          </div>
+
+          <label class="field">
+            <span>Run label</span>
+            <input id="labelInput" type="text" maxlength="80" placeholder="e.g. 16x4-u4-smoke-bundle" />
+          </label>
+
+          <div class="field-row">
+            <label class="field">
+              <span>Boundary condition</span>
+              <select id="bcSelect">
+                <option value="PBC">PBC</option>
+                <option value="APBC">APBC</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>Max Hilbert size</span>
+              <input id="basisInput" type="number" min="1" step="1" value="250000" />
+            </label>
+          </div>
+
+          <div class="upload-grid">
+            <label class="upload-card">
+              <input id="folderInput" type="file" webkitdirectory directory multiple />
+              <span class="upload-kicker">Folder upload</span>
+              <strong>Select a case folder tree</strong>
+              <p>Best when you want to keep the original directory layout intact.</p>
+            </label>
+            <label class="upload-card">
+              <input id="zipInput" type="file" accept=".zip,application/zip" />
+              <span class="upload-kicker">Zip upload</span>
+              <strong>Drop a single archive</strong>
+              <p>Recommended for moving results between machines or triggering GitHub validation later.</p>
+            </label>
+          </div>
+
+          <div class="selection-box">
+            <p class="selection-title">Current selection</p>
+            <p id="selectionSummary">No files selected yet.</p>
+          </div>
+
+          <div class="action-row">
+            <button id="validateButton" class="primary-button" type="button">Run comparison</button>
+            <span id="actionMessage" class="action-message">The browser will encode files to JSON and send them to the local API.</span>
+          </div>
+        </section>
+
+        <aside class="panel history-panel">
+          <div class="section-head compact">
+            <div>
+              <p class="eyebrow">Run History</p>
+              <h2>Recent validations</h2>
+            </div>
+            <button id="refreshHistoryButton" class="ghost-button" type="button">Refresh</button>
+          </div>
+          <div id="historyList" class="history-list">
+            <p class="muted">No stored runs yet.</p>
+          </div>
+        </aside>
+
+        <section class="panel results-panel">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">Validation Output</p>
+              <h2>Energy and Green-function diagnostics</h2>
+            </div>
+            <div id="downloadLinks" class="download-links"></div>
+          </div>
+
+          <div id="resultsSummary" class="results-summary empty-state">
+            <h3>Nothing has been validated yet.</h3>
+            <p>Select a folder or zip bundle, then run the comparison to populate this view.</p>
+          </div>
+
+          <div id="casesTableWrap" class="table-wrap hidden">
+            <table id="casesTable">
+              <thead>
+                <tr>
+                  <th>Case</th>
+                  <th>Mode</th>
+                  <th>QMC energy</th>
+                  <th>ED energy</th>
+                  <th>ED-QMC</th>
+                  <th>Green status</th>
+                  <th>relF up</th>
+                  <th>relF dn</th>
+                  <th>Trace up</th>
+                  <th>Trace dn</th>
+                </tr>
+              </thead>
+              <tbody id="casesTableBody"></tbody>
+            </table>
+          </div>
+
+          <div id="caseCards" class="case-cards"></div>
+        </section>
+      </main>
+    </div>
+
+    <script src="/static/app.js" defer></script>
+  </body>
+</html>
