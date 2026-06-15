@@ -32,6 +32,11 @@ python -m ed_platform.cli tests/fixtures/minimal_case --output-dir tmp-output
 python -m unittest discover -s tests -v
 ```
 
+## Run from GitHub
+
+- `ci.yml` runs on `push`, `pull_request`, and manual dispatch.
+- `validate-case.yml` lets you trigger a manual GitHub Actions run against any case path already committed to the repo, then downloads JSON/CSV/Markdown validation artifacts.
+
 ## GitHub sync note
 
 This repository is ready to be pushed as a standalone GitHub project. The code and update log sync naturally through normal git commits and pushes. Full automatic export of the live Codex conversation into GitHub would require an authenticated GitHub API or CLI bridge, which is not available in the current local environment yet.

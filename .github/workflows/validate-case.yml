@@ -1,0 +1,51 @@
+name: validate-case
+
+on:
+  workflow_dispatch:
+    inputs:
+      case_root:
+        description: "Repository path containing one case folder or a parent directory with cases"
+        required: true
+        default: "tests/fixtures/minimal_case"
+      bc_y:
+        description: "Boundary condition along y"
+        required: true
+        default: "PBC"
+        type: choice
+        options:
+          - PBC
+          - APBC
+      max_basis_states:
+        description: "Maximum Hilbert-space size for exact ED attempts"
+        required: true
+        default: "250000"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install package
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+
+      - name: Run validation
+        run: |
+          python -m ed_platform.cli "${{ inputs.case_root }}" \
+            --bc-y "${{ inputs.bc_y }}" \
+            --max-basis-states "${{ inputs.max_basis_states }}" \
+            --output-dir validation-output
+
+      - name: Upload validation artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-output-${{ github.run_id }}
+          path: validation-output/
