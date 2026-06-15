@@ -32,6 +32,34 @@ python -m ed_platform.cli tests/fixtures/minimal_case --output-dir tmp-output
 python -m unittest discover -s tests -v
 ```
 
+## One-click publish
+
+Run this directly in PowerShell after you finish one round of edits:
+
+```powershell
+cd D:\Lee\QMC\NNN-LxLy\worktrees\2026-06-03_alt_request_clean\data\ed-web-platform
+.\publish.ps1 "your commit message"
+```
+
+If PowerShell execution policy blocks `.ps1`, use:
+
+```powershell
+.\publish.bat "your commit message"
+```
+
+The script will:
+
+- run unit tests
+- stage all changes
+- create a git commit
+- push to the current branch on GitHub
+
+You can skip tests explicitly with:
+
+```powershell
+.\publish.ps1 "your commit message" -SkipTests
+```
+
 ## Run from GitHub
 
 - `ci.yml` runs on `push`, `pull_request`, and manual dispatch.

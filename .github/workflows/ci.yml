@@ -20,7 +20,8 @@ jobs:
       - name: Install package
         run: |
           python -m pip install --upgrade pip
-          pip install -e .[test]
+          pip install -e ".[test]"
+          python -c "import httpx; print(httpx.__version__)"
 
       - name: Run unit tests
         run: python -m unittest discover -s tests -v
